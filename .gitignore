@@ -1,0 +1,19 @@
+# WordPress core — never tracked; downloaded via wp-cli / composer instead.
+/wp-admin
+/wp-includes
+/wp-*.php
+/index.php
+/license.txt
+/readme.html
+/xmlrpc.php
+
+# Local-only.
+/wp-config.php
+.DS_Store
+
+# wp-content: only plugins/ and themes/ are tracked (the deployable code).
+# Everything else (uploads, cache, upgrade files, must-use plugins the
+# orchestrator manages itself, etc.) is environment-specific or generated.
+/wp-content/*
+!/wp-content/plugins
+!/wp-content/themes
