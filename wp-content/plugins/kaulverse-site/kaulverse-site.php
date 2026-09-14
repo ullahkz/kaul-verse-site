@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Kaul Verse Site
  * Description: Core site plugin for kaulverse.com, managed through the WP Orchestrator.
- * Version: 1.0.3
+ * Version: 1.0.4
  */
 
 defined('ABSPATH') || exit;
