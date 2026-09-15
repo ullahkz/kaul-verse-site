@@ -9,7 +9,7 @@ return function ($id) {
         if (!array_key_exists('page_path_' . $i, $meta)) {
             $page = kaulverse_card_destination($meta, $i);
             if (!$page && !empty($meta['page_' . $i])) {
-                WP_CLI::warning('Card ' . $id . ': missing destination for button ' . $i . '; legacy value retained.');
+                kaulverse_cards_migration_notice('Card ' . $id . ': missing destination for button ' . $i . '; legacy value retained.', 'warning');
                 continue;
             }
             $updated['page_path_' . $i] = $page ? get_page_uri($page) : '';

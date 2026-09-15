@@ -11,7 +11,7 @@ return function ($id) {
                 throw new RuntimeException('Could not set featured image for card ' . $id);
             }
         } else {
-            WP_CLI::warning('Card ' . $id . ': legacy image is missing; original value retained in backup metadata.');
+            kaulverse_cards_migration_notice('Card ' . $id . ': legacy image is missing; original value retained in backup metadata.', 'warning');
         }
     }
     $updated = $meta;

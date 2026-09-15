@@ -1,6 +1,21 @@
 <?php
 defined('ABSPATH') || exit;
 
+function kaulverse_cards_migration_notice($message, $level = 'log')
+{
+    if (defined('WP_CLI') && WP_CLI) {
+        if ($level === 'warning') {
+            WP_CLI::warning($message);
+        } else {
+            WP_CLI::log($message);
+        }
+    } else {
+        error_log($message);
+    }
+}
+
+// All migration rollback keys must begin with _kaulverse_card_before_.
+// Deployment tooling uses this prefix to exclude local rollback data from syncs.
 function kaulverse_cards_migration_save($id, $original, $updated, $backup_key)
 {
     if ($original === $updated) { return; }
@@ -30,7 +45,7 @@ function kaulverse_cards_run_migrations()
         if (!update_option('kaulverse_cards_schema_version', $number, false)) {
             throw new RuntimeException('Could not record migration ' . $number);
         }
-        WP_CLI::log('Applied ' . $file);
+        kaulverse_cards_migration_notice('Applied ' . $file);
     }
 }
 
