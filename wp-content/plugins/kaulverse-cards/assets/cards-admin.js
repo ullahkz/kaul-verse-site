@@ -28,5 +28,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     setupImagePicker('main-image', 'Choose main card image', 300);
-    setupImagePicker('thumbnail', 'Choose card thumbnail', 100);
 });

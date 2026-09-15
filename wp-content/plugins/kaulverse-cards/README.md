@@ -3,7 +3,7 @@
 ## Cards
 
 1. Open **Cards → Card Groups** and add groups such as Services or Products. Groups can be renamed, nested, and added at any time. A card can belong to several groups. Changing a group's slug requires updating shortcodes using that slug.
-2. Open **Cards → Add New**. Cards use a simple form editor: the title field is at the top, the supporting text editor is below, and Card Groups are in the sidebar. The **How to use this card** panel displays group shortcodes after saving. Enter a title and supporting text, then optionally add a main card image, small thumbnail, subheading, and up to two buttons in **Card Details**. Each button needs a label and destination page.
+2. Open **Cards → Add New**. Cards use a simple form editor: the title field is at the top, the supporting text editor is below, and Card Groups are in the sidebar. The **How to use this card** panel displays group shortcodes after saving. Enter a title and supporting text, then optionally add a main card image, subheading, and up to two buttons in **Card Details**. Each button needs a label and destination page.
 3. Assign groups, set the Order number (lowest first), and publish.
 4. Copy the shortcode from **Card Groups** into a page's **Shortcode** block:
 
@@ -22,7 +22,7 @@ Cards and groups use native WordPress storage, with no external dependencies. Th
 
 ### Image placement
 
-In **Card Details → Main image position**, choose **Top** or **Bottom**, then save. The main card image spans the full card width above or below the text and buttons. Top is the default. The optional small thumbnail remains beside the heading.
+In **Card Details → Main image position**, choose **Top** or **Bottom**, then save. The main card image spans the full card width above or below the text and buttons. Top is the default.
 
 Select the image using **Card Details → Main card image → Choose main image**. Keep supporting text in the text editor. If an image was previously inserted into the text, remove that inline image manually to avoid displaying it twice.
 
@@ -30,4 +30,13 @@ Select the image using **Card Details → Main card image → Choose main image*
 
 Button destinations store page paths (for example `products/my-product`) instead of IDs. Page selection still uses the dropdown. The current site's URL is generated at render time. Keep the same slugs and parent hierarchy when migrating; reselect a destination after changing its slug or parent. Older ID-based cards remain readable and convert when saved.
 
-Before exporting older cards, run `wp eval-file wp-content/plugins/kaulverse-cards/tests/migrate-page-paths.php` on the source site. This repeatable command retains original metadata under `_kaulverse_card_before_page_paths` for manual rollback. New saves store only page paths for destinations.
+### Data migrations
+
+Run `wp kaulverse-cards migrate` (locally: `ddev wp kaulverse-cards migrate`) before exporting older cards. It runs the numbered files in `migrations/` in order, in batches of 100 cards. The single option `kaulverse_cards_schema_version` records the last completed migration; completed migrations are skipped on subsequent runs. Failed migrations do not advance the version and are safe to retry.
+
+- `001-page-paths.php` converts legacy page IDs to paths.
+- `002-featured-image.php` moves the legacy `thumbnail` into `_thumbnail_id` when no featured image exists, then removes `thumbnail` from card metadata. Existing featured images take priority.
+
+Original card metadata is retained under `_kaulverse_card_before_page_paths` and `_kaulverse_card_before_featured_image` for manual recovery. Missing legacy targets produce warnings. Missing images render no image; missing pages render no button or share link. Old image metadata is still readable until saved or migrated.
+
+The card image now uses WordPress's standard featured-image relationship exclusively. Your content-sync tool must still remap `_thumbnail_id` and transfer the corresponding media between environments.

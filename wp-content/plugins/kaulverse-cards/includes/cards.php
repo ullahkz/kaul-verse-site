@@ -13,6 +13,15 @@ function kaulverse_card_destination($meta, $index)
     return $page && $page->post_type === 'page' ? $page : null;
 }
 
+/** Use the featured image, falling back only for cards not yet migrated. */
+function kaulverse_card_image_id($post_id, $meta)
+{
+    if (metadata_exists('post', $post_id, '_thumbnail_id')) {
+        return absint(get_post_thumbnail_id($post_id));
+    }
+    return !empty($meta['thumbnail']) ? absint($meta['thumbnail']) : 0;
+}
+
 add_action('init', function () {
     register_post_type('kaulverse_card', array(
         'labels' => array('name' => 'Cards', 'singular_name' => 'Card', 'add_new_item' => 'Add New Card', 'edit_item' => 'Edit Card'),
@@ -87,7 +96,7 @@ function kaulverse_card_fields($post)
     $meta = get_post_meta($post->ID, '_kaulverse_card', true);
     $meta = is_array($meta) ? $meta : array();
     echo '<p>Use the title and editor above for your heading and supporting text. Choose the main card image below. Assign Card Groups in the sidebar and use Order to arrange cards (lowest first).</p>';
-    $main_image = get_post_thumbnail_id($post);
+    $main_image = kaulverse_card_image_id($post->ID, $meta);
     echo '<h3>Main card image</h3><p>This image is separate from the supporting text and fills the card width.</p><div id="kv-main-image-preview">';
     if ($main_image) {
         echo wp_get_attachment_image($main_image, 'medium', false, array('style' => 'max-width:100%;height:auto;'));
@@ -98,15 +107,9 @@ function kaulverse_card_fields($post)
     foreach (array('top' => 'Top — above all text', 'bottom' => 'Bottom — below text and buttons') as $value => $label) {
         echo '<option value="' . esc_attr($value) . '" ' . selected($meta['image_position'] ?? 'top', $value, false) . '>' . esc_html($label) . '</option>';
     }
-    echo '</select></p><p class="description">Choose the main card image above. It fills the card width in a separate section. The small thumbnail stays beside the title.</p>';
+    echo '</select></p><p class="description">Choose the main card image above. It fills the card width in a separate section.</p>';
     echo '<p><label for="kv-subheading">Subheading</label><br><input class="widefat" id="kv-subheading" name="kv_card[subheading]" value="' . esc_attr($meta['subheading'] ?? '') . '"></p>';
     echo '<p><label><input type="checkbox" name="kv_card[hide_title]" value="1" ' . checked(!empty($meta['hide_title']), true, false) . '> Hide title on the card</label></p>';
-    echo '<p>Small thumbnail (optional avatar or logo)</p><div id="kv-thumbnail-preview">';
-    if (!empty($meta['thumbnail'])) {
-        echo wp_get_attachment_image($meta['thumbnail'], 'thumbnail');
-    }
-    echo '</div><input type="hidden" id="kv-thumbnail" name="kv_card[thumbnail]" value="' . esc_attr($meta['thumbnail'] ?? '') . '">';
-    echo '<p><button type="button" class="button" id="kv-select-thumbnail">Choose thumbnail</button> <button type="button" class="button" id="kv-remove-thumbnail">Remove thumbnail</button></p>';
     for ($i = 1; $i <= 2; $i++) {
         echo '<p><label for="kv-label-' . $i . '">Button ' . $i . ' label</label><br><input class="widefat" id="kv-label-' . $i . '" name="kv_card[label_' . $i . ']" value="' . esc_attr($meta['label_' . $i] ?? '') . '"></p>';
         echo '<p><label for="kv-page-' . $i . '">Button ' . $i . ' destination page</label><br>';
@@ -134,13 +137,15 @@ add_action('save_post_kaulverse_card', function ($post_id) {
             set_post_thumbnail($post_id, $image_id);
         }
     }
+    if (!isset($input['main_image'])) {
+        $legacy = get_post_meta($post_id, '_kaulverse_card', true);
+        if (is_array($legacy) && !metadata_exists('post', $post_id, '_thumbnail_id') && !empty($legacy['thumbnail']) && wp_attachment_is_image($legacy['thumbnail'])) {
+            set_post_thumbnail($post_id, $legacy['thumbnail']);
+        }
+    }
     $data = array();
     foreach (array('subheading', 'label_1', 'label_2') as $key) {
         $data[$key] = isset($input[$key]) && is_string($input[$key]) ? sanitize_text_field($input[$key]) : '';
-    }
-    foreach (array('thumbnail') as $key) {
-        $id = isset($input[$key]) && is_scalar($input[$key]) ? absint($input[$key]) : 0;
-        $data[$key] = ($key === 'thumbnail' ? wp_attachment_is_image($id) : get_post_type($id) === 'page') ? $id : 0;
     }
     for ($i = 1; $i <= 2; $i++) {
         $value = $input['page_' . $i] ?? 0;
@@ -157,7 +162,7 @@ add_action('admin_enqueue_scripts', function () {
     $screen = get_current_screen();
     if ($screen && $screen->base === 'post' && $screen->post_type === 'kaulverse_card') {
         wp_enqueue_media();
-        wp_enqueue_script('kaulverse-card-admin', plugins_url('../assets/cards-admin.js', __FILE__), array('media-editor'), '1.1.2', true);
+        wp_enqueue_script('kaulverse-card-admin', plugins_url('../assets/cards-admin.js', __FILE__), array('media-editor'), '1.2.0', true);
     }
 });
 
@@ -175,7 +180,7 @@ add_filter('manage_kaulverse_card_group_custom_column', function ($content, $col
 
 // A small stylesheet also covers shortcodes rendered by templates and widgets.
 add_action('wp_enqueue_scripts', function () {
-    wp_enqueue_style('kaulverse-cards', plugins_url('../assets/cards.css', __FILE__), array(), '1.1.2');
+    wp_enqueue_style('kaulverse-cards', plugins_url('../assets/cards.css', __FILE__), array(), '1.2.0');
 });
 
 add_shortcode('kaulverse_cards', 'kaulverse_render_cards');
@@ -191,7 +196,7 @@ function kaulverse_render_cards($attributes)
     if (!$cards->have_posts()) {
         return '';
     }
-    wp_enqueue_script('kaulverse-cards', plugins_url('../assets/cards.js', __FILE__), array(), '1.1.2', true);
+    wp_enqueue_script('kaulverse-cards', plugins_url('../assets/cards.js', __FILE__), array(), '1.2.0', true);
     ob_start();
     echo '<div class="kv-cards kv-cards--' . $columns . '">';
     foreach ($cards->posts as $card) {
@@ -211,15 +216,20 @@ function kaulverse_render_cards($attributes)
             }
         }
         $image = get_the_post_thumbnail($card, 'large', array('class' => 'kv-card__media'));
+        if (!metadata_exists('post', $card->ID, '_thumbnail_id')) {
+            $legacy_image = kaulverse_card_image_id($card->ID, $meta);
+            if ($legacy_image) {
+                $image = wp_get_attachment_image($legacy_image, 'large', false, array('class' => 'kv-card__media'));
+            }
+        }
         $image_position = ($meta['image_position'] ?? 'top') === 'bottom' ? 'bottom' : 'top';
         echo '<article class="kv-card">';
         if ($image_position === 'top') {
             echo $image;
         }
         echo '<div class="kv-card__body">';
-        $thumbnail = !empty($meta['thumbnail']) ? wp_get_attachment_image($meta['thumbnail'], 'thumbnail', false, array('class' => 'kv-card__thumbnail')) : '';
-        if ($thumbnail || (empty($meta['hide_title']) && $title !== '') || !empty($meta['subheading'])) {
-            echo '<header class="kv-card__header">' . $thumbnail . '<div>';
+        if ((empty($meta['hide_title']) && $title !== '') || !empty($meta['subheading'])) {
+            echo '<header class="kv-card__header"><div>';
             if (empty($meta['hide_title']) && $title !== '') {
                 echo '<h3 class="kv-card__title">' . esc_html($title) . '</h3>';
             }
