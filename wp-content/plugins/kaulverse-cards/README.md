@@ -25,3 +25,9 @@ Cards and groups use native WordPress storage, with no external dependencies. Th
 In **Card Details → Main image position**, choose **Top** or **Bottom**, then save. The main card image spans the full card width above or below the text and buttons. Top is the default. The optional small thumbnail remains beside the heading.
 
 Select the image using **Card Details → Main card image → Choose main image**. Keep supporting text in the text editor. If an image was previously inserted into the text, remove that inline image manually to avoid displaying it twice.
+
+### Portable page links
+
+Button destinations store page paths (for example `products/my-product`) instead of IDs. Page selection still uses the dropdown. The current site's URL is generated at render time. Keep the same slugs and parent hierarchy when migrating; reselect a destination after changing its slug or parent. Older ID-based cards remain readable and convert when saved.
+
+Before exporting older cards, run `wp eval-file wp-content/plugins/kaulverse-cards/tests/migrate-page-paths.php` on the source site. This repeatable command retains original metadata under `_kaulverse_card_before_page_paths` for manual rollback. New saves store only page paths for destinations.

@@ -2,6 +2,17 @@
 /** Reusable cards and their groups. */
 defined('ABSPATH') || exit;
 
+/** Resolve portable page paths; keep old ID-based cards readable until saved/migrated. */
+function kaulverse_card_destination($meta, $index)
+{
+    $key = 'page_path_' . $index;
+    if (array_key_exists($key, $meta)) {
+        return $meta[$key] !== '' ? get_page_by_path($meta[$key], OBJECT, 'page') : null;
+    }
+    $page = !empty($meta['page_' . $index]) ? get_post($meta['page_' . $index]) : null;
+    return $page && $page->post_type === 'page' ? $page : null;
+}
+
 add_action('init', function () {
     register_post_type('kaulverse_card', array(
         'labels' => array('name' => 'Cards', 'singular_name' => 'Card', 'add_new_item' => 'Add New Card', 'edit_item' => 'Edit Card'),
@@ -99,7 +110,8 @@ function kaulverse_card_fields($post)
     for ($i = 1; $i <= 2; $i++) {
         echo '<p><label for="kv-label-' . $i . '">Button ' . $i . ' label</label><br><input class="widefat" id="kv-label-' . $i . '" name="kv_card[label_' . $i . ']" value="' . esc_attr($meta['label_' . $i] ?? '') . '"></p>';
         echo '<p><label for="kv-page-' . $i . '">Button ' . $i . ' destination page</label><br>';
-        wp_dropdown_pages(array('name' => 'kv_card[page_' . $i . ']', 'id' => 'kv-page-' . $i, 'selected' => $meta['page_' . $i] ?? 0, 'show_option_none' => 'Select a page', 'option_none_value' => '0'));
+        $destination = kaulverse_card_destination($meta, $i);
+        wp_dropdown_pages(array('name' => 'kv_card[page_' . $i . ']', 'id' => 'kv-page-' . $i, 'selected' => $destination ? $destination->ID : 0, 'show_option_none' => 'Select a page', 'option_none_value' => '0'));
         echo '</p>';
     }
     echo '<p><label><input type="checkbox" name="kv_card[share]" value="1" ' . checked(!empty($meta['share']), true, false) . '> Show share button (shares the first selected published destination page)</label></p>';
@@ -126,9 +138,14 @@ add_action('save_post_kaulverse_card', function ($post_id) {
     foreach (array('subheading', 'label_1', 'label_2') as $key) {
         $data[$key] = isset($input[$key]) && is_string($input[$key]) ? sanitize_text_field($input[$key]) : '';
     }
-    foreach (array('thumbnail', 'page_1', 'page_2') as $key) {
+    foreach (array('thumbnail') as $key) {
         $id = isset($input[$key]) && is_scalar($input[$key]) ? absint($input[$key]) : 0;
         $data[$key] = ($key === 'thumbnail' ? wp_attachment_is_image($id) : get_post_type($id) === 'page') ? $id : 0;
+    }
+    for ($i = 1; $i <= 2; $i++) {
+        $value = $input['page_' . $i] ?? 0;
+        $page = is_scalar($value) && absint($value) ? get_post(absint($value)) : null;
+        $data['page_path_' . $i] = $page && $page->post_type === 'page' ? get_page_uri($page) : '';
     }
     $data['image_position'] = ($input['image_position'] ?? 'top') === 'bottom' ? 'bottom' : 'top';
     $data['hide_title'] = !empty($input['hide_title']);
@@ -184,7 +201,7 @@ function kaulverse_render_cards($attributes)
         $buttons = array();
         $share_url = '';
         for ($i = 1; $i <= 2; $i++) {
-            $page = !empty($meta['page_' . $i]) ? get_post($meta['page_' . $i]) : null;
+            $page = kaulverse_card_destination($meta, $i);
             if ($page && $page->post_type === 'page' && $page->post_status === 'publish' && !$page->post_password) {
                 $url = get_permalink($page);
                 $share_url = $share_url ?: $url;

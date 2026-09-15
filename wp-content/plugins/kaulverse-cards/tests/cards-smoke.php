@@ -32,6 +32,8 @@ try {
     $_POST['kaulverse_card_nonce'] = wp_create_nonce('kaulverse_card_save');
     do_action('save_post_kaulverse_card', $ids[1]);
     $check(get_post_meta($ids[1], '_kaulverse_card', true)['subheading'] === 'Clean text', 'Sanitize saved text');
+    $saved = get_post_meta($ids[1], '_kaulverse_card', true);
+    $check($saved['page_path_1'] === get_page_uri($page) && !isset($saved['page_1']), 'Save path instead of ID');
     unset($_POST['kv_card'], $_POST['kaulverse_card_nonce']);
     wp_set_current_user($previous_user);
     $slug = get_term($terms[0])->slug;
@@ -42,6 +44,12 @@ try {
     $check(strpos($html, '>Visit</a>') !== false && strpos($html, 'data-url=') !== false, 'Render destination and share');
     $check(substr_count(do_shortcode('[kaulverse_cards group="' . $slug . '" limit="1"]'), '<article ') === 1, 'Honor limit');
     $check(do_shortcode('[kaulverse_cards group="missing-' . $suffix . '"]') === '', 'Unknown group empty');
+    $old_slug = get_post_field('post_name', $page);
+    wp_update_post(array('ID' => $page, 'post_name' => $old_slug . '-old'));
+    $replacement = wp_insert_post(array('post_type' => 'page', 'post_title' => 'Replacement', 'post_name' => $old_slug, 'post_status' => 'publish'));
+    $ids[] = $replacement;
+    $check(kaulverse_card_destination($saved, 1)->ID === $replacement, 'Resolve same slug with a different page ID');
+    wp_update_post(array('ID' => $replacement, 'post_status' => 'draft'));
     wp_update_post(array('ID' => $page, 'post_status' => 'draft'));
     $html = do_shortcode('[kaulverse_cards group="' . $slug . '"]');
     $check(strpos($html, '>Visit</a>') === false && strpos($html, 'data-url=') === false, 'Hide unpublished destinations');
