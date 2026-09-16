@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+## Description: Replace this local site's content with develop's (database + uploads). Your code is not touched.
+## Usage: pull-develop [--yes]
+## Example: "ddev pull-develop"
+
+# Content lives on develop; code lives in this repository. This brings the
+# content down so local looks like develop, then you change code here and
+# push the develop branch — the orchestrator deploys it to develop.
+#
+# Kept as it is locally: plugins/ and themes/ (your code), wp-config.php.
+# A backup of the local database is written first.
+
+set -euo pipefail
+
+SSH_KEY="${PULL_DEVELOP_SSH_KEY:-$HOME/.ssh/orchestrator_ionos}"
+SSH_TARGET="su521865@access-5021402058.webspace-host.com"
+REMOTE_PATH="/home/www/public/wordpresss/wordpress-develop"
+LOCAL_URL="${DDEV_PRIMARY_URL}"
+
+ssh_develop() {
+    ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes "$SSH_TARGET" "$@"
+}
+
+cd "$DDEV_APPROOT"
+
+REMOTE_URL="$(ssh_develop "wp --path=$REMOTE_PATH option get home" 2>/dev/null | tr -d '\r')"
+
+if [ -z "$REMOTE_URL" ]; then
+    echo "Could not reach develop over SSH (key: $SSH_KEY)." >&2
+    exit 1
+fi
+
+echo "This replaces the LOCAL database and uploads with develop's:"
+echo "  from  $REMOTE_URL"
+echo "  to    $LOCAL_URL"
+echo "Your code (plugins/, themes/) is not touched."
+
+if [ "${1:-}" != "--yes" ]; then
+    read -r -p "Continue? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { echo "Nothing was changed."; exit 0; }
+fi
+
+backups="wp-content/local-backups"
+mkdir -p "$backups"
+stamp="$(date +%Y%m%d-%H%M%S)"
+
+echo "== Backing up the local database to $backups/local-$stamp.sql.gz"
+ddev export-db --file="$backups/local-$stamp.sql.gz"
+
+echo "== Downloading develop's database"
+ssh_develop "wp --path=$REMOTE_PATH db export - --quiet | gzip" > "$backups/develop-$stamp.sql.gz"
+
+echo "== Importing it"
+ddev import-db --file="$backups/develop-$stamp.sql.gz"
+
+echo "== Pointing it at $LOCAL_URL"
+for from in "$REMOTE_URL" "${REMOTE_URL/https:/http:}"; do
+    ddev wp search-replace "$from" "$LOCAL_URL" --all-tables-with-prefix --precise --skip-plugins --skip-themes --quiet
+    ddev wp search-replace "${from//\//\\/}" "${LOCAL_URL//\//\\/}" --all-tables-with-prefix --precise --skip-plugins --skip-themes --quiet
+done
+
+echo "== Downloading uploads"
+rsync -rlptz --delete \
+    -e "ssh -i $SSH_KEY -o IdentitiesOnly=yes -o BatchMode=yes" \
+    "$SSH_TARGET:$REMOTE_PATH/wp-content/uploads/" wp-content/uploads/
+
+ddev wp cache flush --quiet || true
+ddev wp rewrite flush --quiet || true
+
+rm -f "$backups/develop-$stamp.sql.gz"
+echo "Done. $LOCAL_URL now has develop's content."
+echo "Log in with your develop WordPress account. Previous local database: $backups/local-$stamp.sql.gz"

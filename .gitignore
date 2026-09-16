@@ -9,6 +9,7 @@
 
 # Local-only.
 /wp-config.php
+/wp-config.php.bak*
 .DS_Store
 
 # wp-content: only plugins/ and themes/ are tracked (the deployable code).
